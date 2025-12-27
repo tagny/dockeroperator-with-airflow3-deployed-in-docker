@@ -1,0 +1,42 @@
+repos:
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v6.0.0
+  hooks:
+    - id: trailing-whitespace
+    - id: end-of-file-fixer
+    - id: check-yaml
+    - id: check-added-large-files
+      name: Check for added large files
+      description: Prevent giant files from being committed
+      entry: check-added-large-files
+      language: python
+      types: [file]
+      args: ['--maxkb=100']
+
+- repo: https://github.com/PyCQA/flake8
+  rev: 7.3.0
+  hooks:
+    - id: flake8
+      args: [--max-line-length=88]
+
+- repo: https://github.com/pycqa/isort
+  rev: 7.0.0
+  hooks:
+    - id: isort
+      args: [--profile=black]
+
+- repo: https://github.com/psf/black
+  rev: 25.11.0
+  hooks:
+    - id: black
+      args: [--target-version, py311]
+- repo: https://github.com/Yelp/detect-secrets
+  rev: v1.5.0
+  hooks:
+    - id: detect-secrets
+      args: ['-v', '-n']
+- repo: https://github.com/charliermarsh/ruff-pre-commit
+  rev: v0.14.8
+  hooks:
+    - id: ruff
+      args: [--fix, --exit-non-zero-on-fix]
