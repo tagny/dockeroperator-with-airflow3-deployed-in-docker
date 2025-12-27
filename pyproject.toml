@@ -1,0 +1,12 @@
+[project]
+name = "dockeroperator-with-airflow3-deployed-in-docker"
+version = "0.1.0"
+description = "Deploy airflow in docker to run docker operators"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.5.1",
+]
