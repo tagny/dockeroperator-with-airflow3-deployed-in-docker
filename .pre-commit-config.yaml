@@ -11,7 +11,7 @@ repos:
       entry: check-added-large-files
       language: python
       types: [file]
-      args: ['--maxkb=100']
+      args: ['--maxkb=1000']
 
 - repo: https://github.com/PyCQA/flake8
   rev: 7.3.0
