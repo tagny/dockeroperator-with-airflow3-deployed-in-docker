@@ -5,17 +5,10 @@
 
 # The best way to do this is to:
 
-TEMP_DIR="/opt/airflow"
-cd $TEMP_DIR
+HOST_AIRFLOW_HOME="/opt/airflow"
+cd $HOST_AIRFLOW_HOME
 
 # - Run docker compose down --volumes --remove-orphans command in the directory you
 #   downloaded the docker-compose.yaml file
 
 docker compose down --volumes --remove-orphans
-
-# - Remove the entire directory where you downloaded the docker-compose.yaml file rm
-#   -rf '<DIRECTORY>'
-
-if [ -d "$TEMP_DIR" ]; then
-    rm -r "$TEMP_DIR"
-fi
