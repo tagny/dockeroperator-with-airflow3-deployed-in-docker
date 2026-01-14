@@ -23,7 +23,7 @@ if [ ! -d "$HOST_AIRFLOW_HOME" ]; then
         sudo mkdir -p $HOST_AIRFLOW_HOME
         sudo chown -R $(id -u):$(id -g) $HOST_AIRFLOW_HOME
         sudo chmod -R 755 $HOST_AIRFLOW_HOME
-        mkdir -p $HOST_AIRFLOW_HOME/{dags,logs,plugins,config}
+        mkdir -p $HOST_AIRFLOW_HOME/{config,dags,logs,plugins,config}
     fi
 fi
 
@@ -88,15 +88,15 @@ docker compose up -d
 
 # 5.1. download the wrapper script
 
-curl -LfO 'https://airflow.apache.org/docs/apache-airflow/3.1.5/airflow.sh'
+# curl -LfO 'https://airflow.apache.org/docs/apache-airflow/3.1.6/airflow.sh'
 
-# 5.2. make the wrapper script executable
+# # 5.2. make the wrapper script executable
 
-chmod +x airflow.sh
+# chmod +x airflow.sh
 
-# 5.3. move the wrapper script to the PATH
+# # 5.3. move the wrapper script to the PATH
 
-export PATH=$PATH:$(pwds)
+# export PATH=$PATH:$(pwd)
 
-# 5.4. test the wrapper script
-./airflow.sh info
+# # 5.4. test the wrapper script
+# ./airflow.sh info
