@@ -7,10 +7,8 @@ cd $HOST_AIRFLOW_HOME
 
 # You can run CLI commands in the airflow container by running:
 
-# 5.1. download the wrapper script
-if [ ! -f "airflow.sh" ]; then
-    curl -LfO 'https://airflow.apache.org/docs/apache-airflow/3.1.5/airflow.sh'
+if [ $# -gt 0 ]; then
+    docker compose run --rm airflow-cli "${@}"
+else
+    docker compose run --rm airflow-cli
 fi
-
-# 5.3. test the wrapper script
-bash ./airflow.sh "${@}"
