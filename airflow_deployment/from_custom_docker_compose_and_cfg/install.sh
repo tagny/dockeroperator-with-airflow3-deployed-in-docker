@@ -85,5 +85,5 @@ docker compose up -d
 # 5. Running CLI commands
 
 # You can run CLI commands in the airflow container by running:
-
+cd - # get back to the source dir to run airflow_cli.sh
 bash airflow_cli.sh info
