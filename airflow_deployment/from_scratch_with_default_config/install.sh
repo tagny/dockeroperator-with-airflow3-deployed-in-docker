@@ -12,9 +12,15 @@
 
 # 0. create the temporary dir
 
-HOST_AIRFLOW_HOME=".tmp/airflow-services"
+HOST_AIRFLOW_HOME="/opt/airflow"
 
-mkdir -p $HOST_AIRFLOW_HOME
+if [ ! -d "$HOST_AIRFLOW_HOME" ]; then
+    # if mkdir doesn't work, try with sudo
+    if ! mkdir -p $HOST_AIRFLOW_HOME; then
+        sudo mkdir -p $HOST_AIRFLOW_HOME
+        sudo chown -R $(id -u):$(id -g) $HOST_AIRFLOW_HOME
+    fi
+fi
 
 cd $HOST_AIRFLOW_HOME
 
