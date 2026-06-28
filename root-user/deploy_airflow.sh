@@ -33,8 +33,9 @@ set -euo pipefail
 # ═══════════════════════════════════════════════════════════════
 # Configuration
 # ═══════════════════════════════════════════════════════════════
-
-AIRFLOW_VERSION="${1:-3.2.2}"
+# 1. Define defaults
+AUTO_APPROVE=false
+AIRFLOW_VERSION="3.2.2"
 HOST_AIRFLOW_HOME="/opt/airflow"
 COMPOSE_URL="https://airflow.apache.org/docs/apache-airflow/${AIRFLOW_VERSION}/docker-compose.yaml"
 COMPOSE_FILE="${HOST_AIRFLOW_HOME}/docker-compose.yaml"
@@ -74,14 +75,33 @@ log_step() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 }
 
+# 3. Create a reusable function for y|N questions
+ask_yn() {
+  local prompt="$1"
+  
+  # If -y was passed, automatically approve and print the action
+  if [ "$AUTO_APPROVE" = true ]; then
+    log_warning "$prompt y (auto)"
+    return 0  # 0 means "yes/success" in bash
+  fi
+
+  # Otherwise, ask the user
+  log_warning "$prompt [y|N] "
+  read -r answer
+  if [[ "$answer" =~ ^[Yy]$ ]]; then
+    return 0
+  else
+    return 1  # 1 means "no/failure"
+  fi
+}
+
 check_root() {
     if [ "$(id -u)" -ne 0 ]; then
         log_warning "This script is designed to run as root (or with sudo)."
         log_warning "Some operations (creating /opt/airflow, setting ownership) may fail."
         log_info "Re-run with: sudo $0 $*"
         echo ""
-        read -p "Continue anyway? [y/N] " -r response
-        if [[ ! "$response" =~ ^[Yy]$ ]]; then
+        if ! ask_yn "Continue anyway?" ; then
             exit 1
         fi
     fi
@@ -460,9 +480,7 @@ uninstall_airflow() {
         log_info "Stopping and removing containers"
         dockercompose down -v --remove-orphans || true
         
-        log_warning "Do you want to remove the Airflow directory ($HOST_AIRFLOW_HOME)? [y/N]"
-        read -r response
-        if [[ "$response" =~ ^[Yy]$ ]]; then
+        if ask_yn "Do you want to remove the Airflow directory ($HOST_AIRFLOW_HOME)?"; then
             sudo rm -rf "$HOST_AIRFLOW_HOME"
             log_success "Airflow directory removed"
         else
@@ -501,25 +519,55 @@ show_status() {
 # ═══════════════════════════════════════════════════════════════
 
 main() {
+    echo "╔═══════════════════════════════╗"
+    echo "║     Airflow deployment        ║"
+    echo "╚═══════════════════════════════╝"
+    echo ""
     # Parse command line arguments
-    case "${1:-}" in
-        -h|--help)
-            show_help
-            exit 0
-            ;;
-        --uninstall)
-            check_root
-            uninstall_airflow
-            exit 0
-            ;;
-        --status)
-            show_status
-            exit 0
-            ;;
-    esac
+    # 1. Define the auto-approve variable (default to false)
+    AUTO_APPROVE=false
+    AIRFLOW_VERSION="3.2.2"
+    DO_UNINSTALL=false
+
+    # 2. Parse command-line options manually
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            --uninstall)
+                DO_UNINSTALL=true
+                shift
+                ;;
+            --status)
+                show_status
+                exit 0
+                ;;
+            -y)
+                AUTO_APPROVE=true
+                shift # Move to the next argument
+                ;;
+            -*)
+                echo "Invalid option: $1" >&2
+                exit 1
+                ;;
+            *)
+                # If it doesn't start with '-', assume it's the version number
+                AIRFLOW_VERSION="$1"
+                shift
+                ;;
+        esac
+
+    done
     
     # Check root privileges for deployment
     check_root
+
+    if [ "$DO_UNINSTALL" = true ]; then
+        uninstall_airflow
+        exit 0
+    fi
     
     echo "🚀 Apache Airflow Deployment Script (Root User Version)"
     echo "Version: ${AIRFLOW_VERSION}"
@@ -552,8 +600,6 @@ main() {
     echo "💡 Useful commands:"
     echo "   $0 --status              # Check deployment status"
     echo "   $0 --uninstall           # Remove deployment"
-    echo "   airflow_cmd dags list    # List DAGs"
-    echo "   dockercompose logs -f    # View logs"
     echo ""
 }
 
