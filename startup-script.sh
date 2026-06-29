@@ -150,7 +150,7 @@ deploy_airflow_if_needed() {
     cd "$SETUP_DIR"
     
     # Run deploy script with auto-approve and specific version
-    bash deploy_airflow.sh -y 3.2.2
+    bash deploy_airflow.sh -y -v 3.2.2
     
     log_info "Airflow deployment completed."
 }

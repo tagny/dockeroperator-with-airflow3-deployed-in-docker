@@ -1,28 +1,30 @@
 # DockerOperator with Airflow 3 — Deployed in Docker
 
-A hands-on demo showing how to **deploy Apache Airflow 3** via **Docker Compose** and execute a DAG that uses the [`DockerOperator`](https://airflow.apache.org/docs/apache-airflow-providers-docker/stable/operators/docker.html) — all running inside Docker containers.
+A hands-on demo showing how to deploy **Apache Airflow 3** inside Docker and run a DAG that uses the Airflow `DockerOperator`.
+
+This repository includes a root-user deployment path under `root-user/`, with scripts that install Airflow to `/opt/airflow`, configure Docker socket access, and execute the example DAG.
 
 ---
 
-## Why This Project?
+## What this project demonstrates
 
-Running `DockerOperator` tasks from an Airflow instance that is *itself* containerised requires a specific setup:
-the Airflow containers need access to the host's Docker daemon (`/var/run/docker.sock`) so they can spawn sibling containers.
-This repo automates the entire process — from downloading the official Compose file to patching it with the right socket mount and group permissions — so you can focus on writing DAGs.
+- Deploying Apache Airflow 3 using `docker compose`
+- Running Airflow inside Docker while allowing the scheduler to launch sibling containers via `/var/run/docker.sock`
+- Automating deployment, DAG execution, and health checks with shell scripts
+- Using `DockerOperator` to run a local `helloworld` container image from a DAG
 
 ---
 
 ## Prerequisites
 
-| Tool | Minimum version |
-|------|----------------|
-| **Docker Engine** | ≥ 20.10 |
-| **Docker Compose** (v2 plugin) | `docker compose` must be available |
-| **curl** | any recent version |
-| **jq** | any recent version (used by `run_dag.sh`) |
-| **bash** | ≥ 4 |
+- Linux host
+- Docker Engine ≥ 20.10
+- Docker Compose plugin available as `docker compose`
+- `curl`
+- `jq`
+- `bash` ≥ 4
 
-> **Note:** The scripts use `getent`, `id`, and other standard Linux utilities. They are designed for **Linux** hosts. macOS / WSL2 users may need minor adjustments.
+> The `root-user` scripts expect a Linux host and may require `sudo` or root privileges because they deploy to `/opt/airflow`.
 
 ---
 
@@ -33,47 +35,38 @@ This repo automates the entire process — from downloading the official Compose
 git clone https://github.com/tagny/dockeroperator-with-airflow3-deployed-in-docker.git
 cd dockeroperator-with-airflow3-deployed-in-docker
 
-# 2. Deploy Airflow (defaults to version 3.2.2)
-./deploy_airflow.sh
+# Build the local image used by the example DAG
+docker build -t helloworld .
 
-# 3. Open the Airflow UI
-#    http://localhost:8080
-#    Login: airflow / airflow
+# Run the root-user Airflow deployment scripts
+sudo bash root-user/deploy_airflow.sh
 
-# 4. Run the example DAG
-./run_dag.sh docker_helloworld
+# Trigger the example DAG
+sudo bash root-user/run_dag.sh docker_helloworld
 ```
+
+Once deployed, the Airflow UI is available at:
+
+- http://localhost:8080
+- username: `airflow`
+- password: `airflow`
 
 ---
 
-## What `deploy_airflow.sh` Does
+## Root-user scripts
 
-The script performs five automated steps:
+The root-user deployment scripts are stored in `root-user/`:
 
-| Step | Description |
-|------|-------------|
-| **0** | Creates `/opt/airflow` with `dags/`, `logs/`, `plugins/`, `config/` sub-directories and copies the local `dags/` folder into it |
-| **1** | Downloads the official Docker Compose file for the requested Airflow version, then patches it to mount `/var/run/docker.sock` and add the host's `docker` GID to `group_add` |
-| **2** | Writes the `.env` file (`AIRFLOW_UID`, etc.) and runs `airflow-init` to bootstrap the metadata database |
-| **3** | Starts all services in detached mode (`docker compose up -d`) |
-| **4** | Downloads the official Airflow CLI wrapper script |
-| **5** | Waits for the webserver health endpoint and lists discovered DAGs |
-
-### Usage
-
-```bash
-./deploy_airflow.sh              # deploy default version (3.2.2)
-./deploy_airflow.sh 3.2.1        # deploy a specific version
-./deploy_airflow.sh --status     # show container status
-./deploy_airflow.sh --uninstall  # tear down containers & optionally remove /opt/airflow
-./deploy_airflow.sh --help       # print help
-```
+- `root-user/deploy_airflow.sh` — deploys Airflow to `/opt/airflow`, downloads the official Airflow compose file, patches it for Docker socket access, creates the host directories, initializes the database, and starts the containers.
+- `root-user/run_dag.sh` — triggers the example DAG, monitors its progress, and retries failed tasks if needed.
+- `root-user/check_airflow.sh` — performs a health check of the deployed Airflow environment.
+- `root-user/dags/docker_helloworld.py` — example DAG using `DockerOperator`.
 
 ---
 
-## Example DAG — `docker_helloworld`
+## Example DAG
 
-Located in [`dags/docker_helloworld.py`](dags/docker_helloworld.py):
+The example DAG is located at `root-user/dags/docker_helloworld.py`:
 
 ```python
 from airflow.providers.docker.operators.docker import DockerOperator
@@ -81,7 +74,7 @@ from airflow.sdk import DAG
 from datetime import datetime
 
 with DAG(
-    'docker_helloworld',
+    "docker_helloworld",
     schedule=None,
     tags=["tagny", "docker_operator", "test"],
     doc_md="This is a simple DAG that runs a Docker container",
@@ -90,110 +83,122 @@ with DAG(
 ) as dag:
 
     task = DockerOperator(
-        task_id='step1',
-        image='alpine',
-        command='sleep 3600',
-        auto_remove='force'
+        task_id="step1",
+        image="helloworld",
+        command="echo Hello World!",
+        auto_remove="force",
     )
 ```
 
-The DAG spins up an **Alpine** container via `DockerOperator` and runs `sleep 3600`. Because `auto_remove='force'` is set, the container is cleaned up automatically after the task finishes (or is stopped).
+This DAG launches a short-running container named `helloworld` and executes `echo Hello World!`.
 
 ---
 
-## Running & Monitoring a DAG — `run_dag.sh`
+## Deploying Airflow with `root-user/deploy_airflow.sh`
 
-An idempotent runner that triggers a DAG, monitors it until completion, and handles retries of failed tasks automatically.
+Basic usage:
 
 ```bash
-./run_dag.sh <DAG_ID> [OPTIONS]
+sudo bash root-user/deploy_airflow.sh
 ```
 
-| Option | Description |
-|--------|-------------|
-| `-f`, `--force` | Trigger a new run even if today's run already succeeded |
-| `-n`, `--dry-run` | Preview what would happen without executing |
-| `-w`, `--wait-time` | Max seconds to wait for completion (default: 1200) |
-| `-p`, `--poll-interval` | Seconds between status polls (default: 15) |
+Optional flags:
 
-The script follows this decision logic each time it runs:
+```bash
+sudo bash root-user/deploy_airflow.sh --status
+sudo bash root-user/deploy_airflow.sh --uninstall
+sudo bash root-user/deploy_airflow.sh -v 3.2.1
+sudo bash root-user/deploy_airflow.sh -d /custom/airflow/home
+```
 
-```
-Today's run exists?
-├── No  → trigger a new run and monitor it
-├── Running  → attach and monitor the existing run
-├── Failed  → clear failed tasks, re-trigger downstream, and monitor
-└── Succeeded  → skip (nothing to do)
-```
+The script will:
+
+- create `/opt/airflow` with `dags/`, `logs/`, `plugins/`, and `config/`
+- copy local DAG files into `/opt/airflow/dags/`
+- download the Airflow Docker Compose YAML for the chosen version
+- patch the compose file with `/var/run/docker.sock` and Docker GID support
+- write a `.env` file for Airflow
+- run `airflow-init`
+- start the Airflow containers in detached mode
+- download the official Airflow CLI wrapper script
+- verify the webserver and list DAGs
 
 ---
 
-## Health Check — `check_airflow.sh`
-
-Performs a comprehensive health check of the running deployment:
+## Running the example DAG
 
 ```bash
-./check_airflow.sh
+sudo bash root-user/run_dag.sh docker_helloworld
 ```
 
-Checks include:
+Optional options:
+
+- `-f`, `--force` — force a new run even if one already succeeded today
+- `-n`, `--dry-run` — show what would happen without executing
+- `-w`, `--wait-time` — custom wait timeout
+- `-p`, `--poll-interval` — custom polling interval
+
+---
+
+## Health check
+
+Use the root-user health check script:
+
+```bash
+sudo bash root-user/check_airflow.sh
+```
+
+It verifies:
+
 - Docker Compose availability
-- Compose file presence & YAML validity
-- Host directory structure (`/opt/airflow/{dags,logs,plugins,config}`)
-- Container status (running / healthy)
-- Airflow version & binary path
-- Database connectivity (`airflow db check`)
-- Webserver HTTP response
-- Installed Airflow Python packages
-- Recent scheduler & webserver logs
-
-Results are summarised at the end with a pass/fail count.
+- required host directory structure
+- required files (`.env`, `docker-compose.yaml`, `airflow_cli.sh`, `config/airflow.cfg`)
+- container status and health
+- Airflow version and database connectivity
+- webserver responsiveness
+- recent webserver and scheduler logs
 
 ---
 
-## Project Structure
+## Repository structure
 
-```
+```text
 .
-├── dags/
-│   └── docker_helloworld.py      # Example DAG using DockerOperator
-├── deploy_airflow.sh             # One-command Airflow deployment
-├── check_airflow.sh              # Post-deployment health check
-├── run_dag.sh                    # Idempotent DAG runner with monitoring
-├── .pre-commit-config.yaml       # Linting & formatting hooks
-├── .gitignore
-├── LICENSE                       # The Unlicense (public domain)
-└── README.md
+├── Dockerfile
+├── LICENSE
+├── README.md
+├── startup-script.sh
+├── root-user/
+│   ├── check_airflow.sh
+│   ├── dags/
+│   │   └── docker_helloworld.py
+│   ├── deploy_airflow.sh
+│   └── run_dag.sh
+└── .pre-commit-config.yaml
 ```
 
 ---
 
-## Customisation
+## Notes
 
-- **Airflow version** — pass a version argument: `./deploy_airflow.sh 3.1.0`
-- **Adding your own DAGs** — drop `.py` files into `dags/`; they are copied to `/opt/airflow/dags/` on deploy and auto-discovered by the scheduler.
-- **Extra Python packages** — exec into a running container (`docker compose exec airflow-scheduler pip install ...`) or extend the base image.
-- **Airflow configuration** — edit `/opt/airflow/config/airflow.cfg` after initial deploy, then restart services.
+- The DAG uses a local Docker image named `helloworld`. Build it before triggering the DAG:
 
----
+```bash
+docker build -t helloworld .
+```
 
-## Troubleshooting
+- The root-user deployment assumes the current host user can access Docker and that the Docker daemon is running.
 
-| Symptom | Likely cause | Fix |
-|---------|-------------|-----|
-| `DockerOperator` task fails with *Permission denied* on `/var/run/docker.sock` | Airflow container user is not in the `docker` group | Re-run `deploy_airflow.sh` — it patches `group_add` automatically |
-| Webserver unreachable on port 8080 | Services still initialising | Run `./check_airflow.sh` and wait; check logs with `docker compose -f /opt/airflow/docker-compose.yaml logs -f` |
-| DAG not visible in the UI | File not in `/opt/airflow/dags/` or syntax error | Verify the file was copied and run `python -c "import py_compile; py_compile.compile('dags/your_dag.py')"` |
-| `getent: command not found` | Running on macOS without coreutils | Install GNU coreutils (`brew install coreutils`) or run inside a Linux VM / WSL2 |
+- If Airflow cannot access `/var/run/docker.sock`, the script adds the host Docker group ID to the container configuration.
 
 ---
 
 ## License
 
-This project is released into the **public domain** under [The Unlicense](https://unlicense.org). See the [LICENSE](LICENSE) file.
+This project is released into the public domain under [The Unlicense](https://unlicense.org). See `LICENSE`.
 
 ---
 
 ## Contributing
 
-Contributions, issues, and feature requests are welcome. Feel free to open an issue or submit a pull request.
+Contributions, issues, and improvements are welcome. Open an issue or submit a pull request.
